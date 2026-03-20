@@ -232,22 +232,20 @@ actor GatewayEndpointStore {
 
     init(deps: Deps = .live) {
         self.deps = deps
-        let modeRaw = UserDefaults.standard.string(forKey: connectionModeKey)
-        let initialMode: AppState.ConnectionMode
-        if let modeRaw {
-            initialMode = AppState.ConnectionMode(rawValue: modeRaw) ?? .local
-        } else {
-            let seen = UserDefaults.standard.bool(forKey: "openclaw.onboardingSeen")
-            initialMode = seen ? .local : .unconfigured
-        }
+        // Use the full ConnectionModeResolver so the initial mode agrees with AppState,
+        // which also resolves from the config file. Reading only from UserDefaults can
+        // disagree when the config file sets gateway.mode but didSet never fired (e.g. on
+        // first launch after a config-file change).
+        let root = OpenClawConfigFile.loadDict()
+        let initialMode = ConnectionModeResolver.resolve(root: root).mode
 
         let port = deps.localPort()
         let bind = GatewayEndpointStore.resolveGatewayBindMode(
-            root: OpenClawConfigFile.loadDict(),
+            root: root,
             env: ProcessInfo.processInfo.environment)
-        let customBindHost = GatewayEndpointStore.resolveGatewayCustomBindHost(root: OpenClawConfigFile.loadDict())
+        let customBindHost = GatewayEndpointStore.resolveGatewayCustomBindHost(root: root)
         let scheme = GatewayEndpointStore.resolveGatewayScheme(
-            root: OpenClawConfigFile.loadDict(),
+            root: root,
             env: ProcessInfo.processInfo.environment)
         let host = GatewayEndpointStore.resolveLocalGatewayHost(
             bindMode: bind,

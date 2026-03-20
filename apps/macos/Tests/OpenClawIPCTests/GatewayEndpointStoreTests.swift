@@ -156,6 +156,40 @@ struct GatewayEndpointStoreTests {
         #expect(resolved.mode == .remote)
     }
 
+    // Regression: config file sets gateway.mode=remote, but UserDefaults was never
+    // updated (didSet doesn't fire during AppState.init). The endpoint store must
+    // still resolve to .remote so it starts in .connecting rather than .ready(mode: .local).
+    @Test func `connection mode resolver returns remote when config overrides stale defaults`() {
+        let defaults = self.makeDefaults()
+        defaults.set("local", forKey: connectionModeKey)
+
+        let root: [String: Any] = [
+            "gateway": [
+                "mode": "remote",
+            ],
+        ]
+
+        let resolved = ConnectionModeResolver.resolve(root: root, defaults: defaults)
+        #expect(resolved.mode == .remote)
+        #expect(resolved.source == .configMode)
+    }
+
+    @Test func `connection mode resolver returns remote with empty defaults`() {
+        let defaults = self.makeDefaults()
+        // No connectionModeKey set — simulates first launch after config-file edit.
+        defaults.set(true, forKey: "openclaw.onboardingSeen")
+
+        let root: [String: Any] = [
+            "gateway": [
+                "mode": "remote",
+            ],
+        ]
+
+        let resolved = ConnectionModeResolver.resolve(root: root, defaults: defaults)
+        #expect(resolved.mode == .remote)
+        #expect(resolved.source == .configMode)
+    }
+
     @Test func `resolve local gateway host uses loopback for auto even with tailnet`() {
         let host = GatewayEndpointStore._testResolveLocalGatewayHost(
             bindMode: "auto",

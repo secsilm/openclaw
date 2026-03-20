@@ -10,6 +10,7 @@ final class GatewayConnectivityCoordinator {
     private let logger = Logger(subsystem: "ai.openclaw", category: "gateway.connectivity")
     private var endpointTask: Task<Void, Never>?
     private var lastResolvedURL: URL?
+    private var lastResolvedMode: AppState.ConnectionMode?
 
     private(set) var endpointState: GatewayEndpointState?
     private(set) var resolvedURL: URL?
@@ -40,13 +41,22 @@ final class GatewayConnectivityCoordinator {
         self.endpointState = state
         switch state {
         case let .ready(mode, url, _, _):
+            let previousMode = self.resolvedMode
             self.resolvedMode = mode
             self.resolvedURL = url
             self.resolvedHostLabel = Self.hostLabel(for: url)
             let urlChanged = self.lastResolvedURL?.absoluteString != url.absoluteString
-            if urlChanged {
+            let modeChanged = self.lastResolvedMode != mode
+            if urlChanged || modeChanged {
                 self.lastResolvedURL = url
-                Task { await ControlChannel.shared.refreshEndpoint(reason: "endpoint changed") }
+                self.lastResolvedMode = mode
+                let reason = urlChanged ? "endpoint changed" : "mode changed"
+                self.logger.debug(
+                    "endpoint refresh trigger " +
+                        "reason=\(reason, privacy: .public) " +
+                        "mode=\(String(describing: mode), privacy: .public) " +
+                        "prev=\(String(describing: previousMode), privacy: .public)")
+                Task { await ControlChannel.shared.refreshEndpoint(reason: reason) }
             }
         case let .connecting(mode, _):
             self.resolvedMode = mode
